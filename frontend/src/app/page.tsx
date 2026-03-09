@@ -368,19 +368,100 @@ function CollapsibleCard({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Agent progress steps — timing is approximate but matches real pipeline order
+// ---------------------------------------------------------------------------
+
+const AGENT_STEPS = [
+  { label: "Dissecting the decision",        ms: 0    },
+  { label: "Extracting evidence signals",    ms: 6000  },
+  { label: "Building Optimist case",         ms: 12000 },
+  { label: "Building Pessimist case",        ms: 18000 },
+  { label: "Running Rebuttal",               ms: 23000 },
+  { label: "Moderator synthesizing debate",  ms: 28000 },
+  { label: "Simulating stakeholder reactions", ms: 34000 },
+  { label: "Computing radar scores",         ms: 40000 },
+  { label: "Assembling final briefing",      ms: 44000 },
+];
+
 function LoadingSpinner() {
+  const [activeStep, setActiveStep] = useState(0);
+
+  // Advance through steps on a timer that mirrors the real agent pipeline
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    AGENT_STEPS.forEach((step, i) => {
+      if (i === 0) return; // step 0 is already active
+      timers.push(setTimeout(() => setActiveStep(i), step.ms));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
   return (
-    <div className="flex flex-col items-center justify-center py-10 gap-4">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/loading.gif"
-        alt="Analyzing…"
-        className="w-24 h-24 object-contain"
-        style={{ imageRendering: "pixelated" }}
-      />
-      <div className="flex flex-col items-center gap-1">
-        <p className="text-white text-sm font-semibold">Running autopsy…</p>
-        <p className="text-slate-500 text-xs">~45 seconds · 7 agents thinking</p>
+    <div className="w-full max-w-2xl">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+
+        {/* GIF + headline */}
+        <div className="flex items-center gap-4 mb-5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/loading.gif"
+            alt="Analyzing…"
+            className="w-14 h-14 object-contain shrink-0"
+            style={{ imageRendering: "pixelated" }}
+          />
+          <div>
+            <p className="text-white font-semibold text-sm">Running autopsy…</p>
+            <p className="text-slate-500 text-xs mt-0.5">7 agents · ~45 seconds</p>
+          </div>
+        </div>
+
+        {/* Step list */}
+        <div className="space-y-2">
+          {AGENT_STEPS.map((step, i) => {
+            const done   = i < activeStep;
+            const active = i === activeStep;
+            const pending = i > activeStep;
+            return (
+              <div key={i} className="flex items-center gap-3">
+                {/* Icon */}
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-all duration-300
+                  ${done    ? "bg-emerald-500/20 border border-emerald-600"  : ""}
+                  ${active  ? "bg-brand-500/20 border border-brand-500"      : ""}
+                  ${pending ? "bg-slate-800 border border-slate-700"         : ""}`}>
+                  {done && (
+                    <svg viewBox="0 0 12 12" fill="none" className="w-3 h-3">
+                      <path d="M2 6l3 3 5-5" stroke="#34d399" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                  {active && (
+                    <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+                  )}
+                  {pending && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
+                  )}
+                </div>
+
+                {/* Label */}
+                <span className={`text-xs transition-all duration-300
+                  ${done    ? "text-emerald-400 line-through decoration-emerald-700" : ""}
+                  ${active  ? "text-white font-semibold"                             : ""}
+                  ${pending ? "text-slate-600"                                       : ""}`}>
+                  {step.label}
+                </span>
+
+                {/* Active shimmer bar */}
+                {active && (
+                  <div className="flex-1 h-0.5 rounded-full bg-slate-800 overflow-hidden ml-1">
+                    <div className="h-full bg-brand-500/60 rounded-full animate-pulse w-3/4" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
       </div>
     </div>
   );
