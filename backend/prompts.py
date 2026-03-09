@@ -28,6 +28,8 @@ CRITICAL JSON SAFETY RULES (must follow or output breaks):
 - Never include unescaped double quotes inside a JSON string value
 - All JSON string values must stay on a single line
 - The response must be a single valid JSON object — no extra text after the closing brace
+- Do NOT add any new JSON keys not present in the schema above
+- Do NOT add an "evidence" key or any other extra key — only use the exact keys specified
 """
 
 # ---------------------------------------------------------------------------

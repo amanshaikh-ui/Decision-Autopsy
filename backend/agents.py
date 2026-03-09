@@ -217,14 +217,16 @@ def run_reaction_simulator(
     transcript: str, autopsy: dict,
     strict_citations: bool = False, indexed_tx: str = ""
 ) -> dict:
+    # Citation rules intentionally NOT applied to Reaction Simulator —
+    # the fixed schema (role/sentiment/concern/quote) has no room for inline
+    # evidence keys, and appending CITATION_RULES causes the model to add
+    # extra fields + newlines that break Groq's JSON validator.
+    # The indexed transcript is still passed so quotes can naturally reference lines.
     tx = _tx(transcript, strict_citations, indexed_tx)
-    user = _cite(
-        REACTION_SIM_USER.format(
-            transcript=tx,
-            decision=autopsy.get("decision", ""),
-            status=autopsy.get("status", ""),
-        ),
-        strict_citations,
+    user = REACTION_SIM_USER.format(
+        transcript=tx,
+        decision=autopsy.get("decision", ""),
+        status=autopsy.get("status", ""),
     )
     raw = _chat(REACTION_SIM_SYSTEM, user)
     return _parse_json(raw)
