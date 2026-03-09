@@ -1,0 +1,40 @@
+# ── Python ────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Environment / secrets ─────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# ── Node / Next.js ────────────────────────────────────
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# ── OS / Editor ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Logs ──────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ── Misc ──────────────────────────────────────────────
+*.tmp
+*.bak

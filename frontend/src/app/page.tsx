@@ -1,0 +1,902 @@
+"use client";
+
+import { useState, useRef } from "react";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface VerdictData {
+  recommendation: string;
+  confidence: "Low" | "Medium" | "High";
+  why: string;
+}
+
+interface AutopsyData {
+  decision: string;
+  status: "Proposed" | "Leaning" | "Unresolved" | "Decided";
+  top_risks: string[];
+  missing_evidence: string[];
+  supporting_evidence: string[];
+}
+
+interface SideData {
+  summary: string;
+  evidence: string[];
+}
+
+interface ModeratorData {
+  disagreement: string;
+  stronger_side: string;
+  what_settles_it: string[];
+}
+
+interface RebuttalData {
+  bullets: string[];
+}
+
+interface StakeholderReaction {
+  role: string;
+  sentiment: "Positive" | "Neutral" | "Negative";
+  concern: string;
+  quote: string;
+}
+
+interface ReactionSimData {
+  stakeholders: StakeholderReaction[];
+}
+
+interface RadarScores {
+  evidence_strength: number;      // computed from support/validation signals
+  risk_level: number;             // computed from risk/constraint signals
+  stakeholder_alignment: number;  // computed from stance distribution
+  uncertainty: number;            // computed from missing evidence + unknowns
+  action_readiness: number;       // computed from risks + uncertainty + alignment
+}
+
+interface SignalCounts {
+  support: number;
+  risk: number;
+  validation: number;
+  unknown: number;
+}
+
+interface RadarData {
+  scores: RadarScores;
+  status: string;        // "Go" | "Proceed with caution" | "Hold" | "Not enough info"
+  reason: string;        // code-generated short explanation
+  signal_counts: SignalCounts;
+  summary: string;       // kept for compat; may be empty
+}
+
+interface AnalysisResult {
+  verdict: VerdictData;
+  autopsy: AutopsyData;
+  optimist: SideData;
+  pessimist: SideData;
+  moderator: ModeratorData;
+  rebuttal: RebuttalData;
+  reactions: ReactionSimData;
+  radar: RadarData;
+}
+
+// Radar status → visual style
+const radarStatusStyle: Record<string, { badge: string; dot: string }> = {
+  "Go":                    { badge: "bg-emerald-500/20 text-emerald-300 border-emerald-700", dot: "bg-emerald-400" },
+  "Proceed with caution":  { badge: "bg-yellow-500/20 text-yellow-300 border-yellow-700",   dot: "bg-yellow-400" },
+  "Hold":                  { badge: "bg-red-500/20 text-red-300 border-red-700",             dot: "bg-red-400"   },
+  "Not enough info":       { badge: "bg-slate-500/20 text-slate-300 border-slate-600",       dot: "bg-slate-400" },
+};
+
+// ---------------------------------------------------------------------------
+// Citation rendering — splits text on "Speaker (line N): "quote"" patterns
+// and highlights them with subtle amber monospace chips.
+// Used whenever Strict Citation Mode is ON.
+// ---------------------------------------------------------------------------
+
+// Matches: Speaker (line N): "snippet" or Speaker (line N): 'snippet'
+const CITE_RE = /([A-Za-z][A-Za-z\s,.']{1,40}?\(line \d+\):\s*(?:"[^"]*"|'[^']*'))/g;
+
+function renderWithCitations(text: string): React.ReactNode {
+  if (!text.includes("(line ")) return <span>{text}</span>;
+  const parts = text.split(CITE_RE);
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <cite
+            key={i}
+            title="Transcript citation"
+            className="not-italic font-mono text-[10px] text-amber-400/80 bg-amber-950/40
+                       border border-amber-800/40 rounded px-1 mx-0.5 inline-block leading-normal
+                       whitespace-nowrap align-middle"
+          >
+            {part}
+          </cite>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
+// CiteText: wraps a string and optionally applies citation rendering
+function CiteText({
+  text,
+  cite,
+  className = "",
+}: {
+  text: string;
+  cite: boolean;
+  className?: string;
+}) {
+  return <span className={className}>{cite ? renderWithCitations(text) : text}</span>;
+}
+
+// CitedBulletList: like BulletList but citation-aware per item
+function CitedBulletList({
+  items,
+  color = "text-slate-300",
+  cite = false,
+}: {
+  items: string[];
+  color?: string;
+  cite?: boolean;
+}) {
+  if (!items.length) return <p className="text-slate-500 text-xs italic">None identified.</p>;
+  return (
+    <ul className="space-y-1.5">
+      {items.map((item, i) => (
+        <li key={i} className={`text-sm flex gap-2 ${color}`}>
+          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current shrink-0 opacity-60" />
+          <span>{cite ? renderWithCitations(item) : item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Transcript highlighting
+// ---------------------------------------------------------------------------
+
+type SegmentType = "none" | "supporting";
+interface Segment { text: string; type: SegmentType }
+
+function buildSegments(text: string, supporting: string[]): Segment[] {
+  type Mark = { start: number; end: number };
+  const marks: Mark[] = [];
+  for (const s of supporting) {
+    if (!s) continue;
+    const i = text.indexOf(s);
+    if (i !== -1) marks.push({ start: i, end: i + s.length });
+  }
+  marks.sort((a, b) => a.start - b.start);
+  const segs: Segment[] = [];
+  let pos = 0;
+  for (const m of marks) {
+    if (m.start < pos) continue;
+    if (m.start > pos) segs.push({ text: text.slice(pos, m.start), type: "none" });
+    segs.push({ text: text.slice(m.start, m.end), type: "supporting" });
+    pos = m.end;
+  }
+  if (pos < text.length) segs.push({ text: text.slice(pos), type: "none" });
+  return segs.length ? segs : [{ text, type: "none" }];
+}
+
+const hlClass: Record<SegmentType, string> = {
+  none: "",
+  supporting: "bg-emerald-500/25 text-emerald-200 rounded px-0.5",
+};
+
+// ---------------------------------------------------------------------------
+// Markdown export
+// ---------------------------------------------------------------------------
+
+function buildMarkdown(transcript: string, question: string, r: AnalysisResult): string {
+  const bul = (arr: string[]) => arr.map((x) => `- ${x}`).join("\n") || "_None_";
+  const stakeholders = r.reactions.stakeholders
+    .map((s) => `- **${s.role}** (${s.sentiment}): ${s.concern} — _"${s.quote}"_`)
+    .join("\n");
+  const scores = r.radar.scores;
+  return `# Decision Autopsy
+
+**Question:** ${question}
+
+## Instant Verdict
+- **Recommendation:** ${r.verdict.recommendation}
+- **Confidence:** ${r.verdict.confidence}
+- **Why:** ${r.verdict.why}
+
+## Decision Autopsy
+- **Decision:** ${r.autopsy.decision}
+- **Status:** ${r.autopsy.status}
+
+**Top Risks:**
+${bul(r.autopsy.top_risks)}
+
+**Missing Evidence:**
+${bul(r.autopsy.missing_evidence)}
+
+## Optimist
+${r.optimist.summary}
+
+${bul(r.optimist.evidence)}
+
+## Pessimist
+${r.pessimist.summary}
+
+${bul(r.pessimist.evidence)}
+
+## Moderator
+- **Core disagreement:** ${r.moderator.disagreement}
+- **Stronger side:** ${r.moderator.stronger_side}
+
+**What settles it:**
+${bul(r.moderator.what_settles_it)}
+
+## Reaction Simulator
+${stakeholders}
+
+## Decision Radar
+- Status: ${r.radar.status}
+- Evidence Strength: ${scores.evidence_strength}/10
+- Risk Level: ${scores.risk_level}/10
+- Stakeholder Alignment: ${scores.stakeholder_alignment}/10
+- Uncertainty: ${scores.uncertainty}/10
+- Action Readiness: ${scores.action_readiness}/10
+
+${r.radar.reason}
+Signal counts — Support: ${r.radar.signal_counts.support}, Risk: ${r.radar.signal_counts.risk}, Validation: ${r.radar.signal_counts.validation}, Unknown: ${r.radar.signal_counts.unknown}
+
+## Rebuttal
+${bul(r.rebuttal.bullets)}
+
+---
+## Transcript
+${transcript}
+`;
+}
+
+// ---------------------------------------------------------------------------
+// Copy summary
+// ---------------------------------------------------------------------------
+
+function buildCopySummary(question: string, r: AnalysisResult): string {
+  return [
+    `Question: ${question}`,
+    `Verdict: ${r.verdict.recommendation} (${r.verdict.confidence}) — ${r.verdict.why}`,
+    `Optimist: ${r.optimist.summary}`,
+    `Pessimist: ${r.pessimist.summary}`,
+    `Moderator: ${r.moderator.stronger_side}`,
+    `Radar: ${r.radar.status} — ${r.radar.reason}`,
+  ].join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// TTS script
+// ---------------------------------------------------------------------------
+
+function buildAudioScript(r: AnalysisResult): string {
+  const settles = r.moderator.what_settles_it.slice(0, 2).join(". ");
+  return [
+    "Decision briefing.",
+    `Verdict: ${r.verdict.recommendation}. Confidence: ${r.verdict.confidence}. ${r.verdict.why}.`,
+    `Optimist: ${r.optimist.summary}.`,
+    `Pessimist: ${r.pessimist.summary}.`,
+    `Moderator: ${r.moderator.stronger_side}. ${settles}.`,
+    `Decision radar status: ${r.radar.status}. ${r.radar.reason}`,
+  ].join(" ");
+}
+
+// ---------------------------------------------------------------------------
+// UI primitives
+// ---------------------------------------------------------------------------
+
+const confidenceStyle: Record<string, string> = {
+  High: "bg-emerald-500/20 text-emerald-300 border-emerald-700",
+  Medium: "bg-yellow-500/20 text-yellow-300 border-yellow-700",
+  Low: "bg-red-500/20 text-red-300 border-red-700",
+};
+
+const statusStyle: Record<string, string> = {
+  Decided: "bg-sky-500/20 text-sky-300 border-sky-700",
+  Leaning: "bg-yellow-500/20 text-yellow-300 border-yellow-700",
+  Proposed: "bg-slate-500/20 text-slate-300 border-slate-600",
+  Unresolved: "bg-red-500/20 text-red-300 border-red-700",
+};
+
+const sentimentStyle: Record<string, { card: string; dot: string; label: string }> = {
+  Positive: { card: "bg-emerald-900/25 border-emerald-800/50", dot: "bg-emerald-400", label: "text-emerald-400" },
+  Neutral: { card: "bg-slate-800/60 border-slate-700/50", dot: "bg-slate-400", label: "text-slate-400" },
+  Negative: { card: "bg-red-900/25 border-red-800/50", dot: "bg-red-400", label: "text-red-400" },
+};
+
+function Badge({ label, style }: { label: string; style: string }) {
+  return (
+    <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${style}`}>{label}</span>
+  );
+}
+
+function BulletList({ items, color = "text-slate-300" }: { items: string[]; color?: string }) {
+  if (!items.length) return <p className="text-slate-500 text-xs italic">None identified.</p>;
+  return (
+    <ul className="space-y-1.5">
+      {items.map((item, i) => (
+        <li key={i} className={`text-sm flex gap-2 ${color}`}>
+          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current shrink-0 opacity-60" />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SectionLabel({ text, color }: { text: string; color: string }) {
+  return <p className={`text-xs font-semibold uppercase tracking-widest mb-2 ${color}`}>{text}</p>;
+}
+
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function CollapsibleCard({
+  title,
+  accent,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  accent: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between">
+        <span className={`text-xs font-semibold uppercase tracking-widest ${accent}`}>{title}</span>
+        <span className="text-slate-500 text-xs">{open ? "▲ hide" : "▼ show"}</span>
+      </button>
+      {open && <div className="mt-4">{children}</div>}
+    </Card>
+  );
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="flex flex-col items-center justify-center py-10 gap-4">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/loading.gif"
+        alt="Analyzing…"
+        className="w-24 h-24 object-contain"
+        style={{ imageRendering: "pixelated" }}
+      />
+      <div className="flex flex-col items-center gap-1">
+        <p className="text-white text-sm font-semibold">Running autopsy…</p>
+        <p className="text-slate-500 text-xs">~45 seconds · 7 agents thinking</p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reaction Simulator card
+// ---------------------------------------------------------------------------
+
+function StakeholderCard({ s, cite = false }: { s: StakeholderReaction; cite?: boolean }) {
+  const style = sentimentStyle[s.sentiment] ?? sentimentStyle.Neutral;
+  return (
+    <div className={`rounded-xl border p-3 ${style.card}`}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
+        <span className="text-white text-xs font-semibold flex-1">{s.role}</span>
+        <span className={`text-xs font-medium ${style.label}`}>{s.sentiment}</span>
+      </div>
+      <p className="text-slate-400 text-xs mb-1.5">
+        {cite ? renderWithCitations(s.concern) : s.concern}
+      </p>
+      <p className={`text-xs italic ${style.label}`}>
+        &ldquo;{cite ? renderWithCitations(s.quote) : s.quote}&rdquo;
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Decision Radar — pure SVG pentagon chart
+// ---------------------------------------------------------------------------
+
+const RADAR_AXES: { key: keyof RadarScores; label: string }[] = [
+  { key: "evidence_strength",     label: "Evidence" },
+  { key: "risk_level",            label: "Risk" },
+  { key: "stakeholder_alignment", label: "Alignment" },
+  { key: "uncertainty",           label: "Uncertainty" },
+  { key: "action_readiness",      label: "Readiness" },
+];
+
+const N = RADAR_AXES.length;
+const CX = 120, CY = 120, R = 80;
+
+function radarAngle(i: number) {
+  return (Math.PI * 2 * i) / N - Math.PI / 2;
+}
+
+function radarPoint(i: number, value: number): [number, number] {
+  const a = radarAngle(i);
+  const r = (Math.max(0, Math.min(10, value)) / 10) * R;
+  return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+}
+
+function outerPoint(i: number, extra = 0): [number, number] {
+  const a = radarAngle(i);
+  return [CX + (R + extra) * Math.cos(a), CY + (R + extra) * Math.sin(a)];
+}
+
+function gridPoints(level: number): string {
+  return Array.from({ length: N }, (_, i) => {
+    const a = radarAngle(i);
+    const r = (level / 10) * R;
+    return `${CX + r * Math.cos(a)},${CY + r * Math.sin(a)}`;
+  }).join(" ");
+}
+
+function RadarChart({ scores }: { scores: RadarScores }) {
+  const values = RADAR_AXES.map((a) => scores[a.key] ?? 5);
+  const dataPoints = values.map((v, i) => radarPoint(i, v));
+  const polygon = dataPoints.map(([x, y]) => `${x},${y}`).join(" ");
+
+  return (
+    <svg viewBox="0 0 240 240" className="w-full max-w-[260px] mx-auto">
+      {/* Grid rings */}
+      {[2, 4, 6, 8, 10].map((lvl) => (
+        <polygon
+          key={lvl}
+          points={gridPoints(lvl)}
+          fill="none"
+          stroke="#1e293b"
+          strokeWidth={lvl === 10 ? 1 : 0.6}
+        />
+      ))}
+
+      {/* Axis spokes */}
+      {Array.from({ length: N }, (_, i) => {
+        const [ox, oy] = outerPoint(i);
+        return (
+          <line key={i} x1={CX} y1={CY} x2={ox} y2={oy} stroke="#1e293b" strokeWidth="0.8" />
+        );
+      })}
+
+      {/* Score polygon */}
+      <polygon
+        points={polygon}
+        fill="rgba(79,102,247,0.18)"
+        stroke="rgb(79,102,247)"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+
+      {/* Score dots */}
+      {dataPoints.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r="3.5" fill="rgb(79,102,247)" />
+      ))}
+
+      {/* Axis labels + score values */}
+      {RADAR_AXES.map((axis, i) => {
+        const [lx, ly] = outerPoint(i, 22);
+        const cos = Math.cos(radarAngle(i));
+        const anchor = Math.abs(cos) < 0.15 ? "middle" : cos > 0 ? "start" : "end";
+        const [dx, dy] = dataPoints[i];
+        return (
+          <g key={i}>
+            <text x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle"
+              fill="#64748b" fontSize="9" fontWeight="500">
+              {axis.label}
+            </text>
+            <text x={dx} y={dy - 7} textAnchor="middle" dominantBaseline="auto"
+              fill="#e2e8f0" fontSize="8" fontWeight="700">
+              {values[i]}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+export default function Home() {
+  const [transcript, setTranscript] = useState("");
+  const [question, setQuestion] = useState("");
+  const [strictCitations, setStrictCitations] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [activeCitations, setActiveCitations] = useState(false); // reflects what the result was generated with
+  const [error, setError] = useState<string | null>(null);
+  const [speaking, setSpeaking] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  async function runAnalysis() {
+    if (!transcript.trim() || !question.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    stopAudio();
+    try {
+      const res = await fetch(`${API_URL}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript, question, strict_citations: strictCitations }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Analysis failed");
+      }
+      setResult(await res.json());
+      setActiveCitations(strictCitations);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function playAudio() {
+    if (!result || !("speechSynthesis" in window)) return;
+    stopAudio();
+    const utt = new SpeechSynthesisUtterance(buildAudioScript(result));
+    utt.rate = 0.95;
+    utt.onend = () => setSpeaking(false);
+    utt.onerror = () => setSpeaking(false);
+    utteranceRef.current = utt;
+    window.speechSynthesis.speak(utt);
+    setSpeaking(true);
+  }
+
+  function stopAudio() {
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    setSpeaking(false);
+  }
+
+  async function copySummary() {
+    if (!result) return;
+    await navigator.clipboard.writeText(buildCopySummary(question, result));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function exportMarkdown() {
+    if (!result) return;
+    const blob = new Blob([buildMarkdown(transcript, question, result)], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "decision-autopsy.md";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const segments = result ? buildSegments(transcript, result.autopsy.supporting_evidence) : [];
+  const hasHighlights = result && result.autopsy.supporting_evidence.length > 0;
+
+  return (
+    <main className="min-h-screen flex flex-col items-center px-4 py-12 gap-7">
+
+      {/* Header */}
+      <header className="text-center max-w-lg">
+        <h1 className="text-3xl font-bold tracking-tight text-white mb-1">
+          Decision <span className="text-brand-500">Autopsy</span>
+        </h1>
+        <p className="text-slate-500 text-sm">Paste a transcript · Ask a question · Get a briefing</p>
+      </header>
+
+      {/* Input card */}
+      <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="transcript" className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
+            Decision Transcript
+          </label>
+          <textarea
+            id="transcript"
+            rows={8}
+            value={transcript}
+            onChange={(e) => setTranscript(e.target.value)}
+            placeholder="Paste the transcript or description of the decision here…"
+            className="w-full rounded-xl bg-slate-800 border border-slate-700 text-slate-100
+                       placeholder-slate-600 px-4 py-3 text-sm resize-y focus:outline-none
+                       focus:ring-2 focus:ring-brand-500 transition"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="question" className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
+            Question
+          </label>
+          <input
+            id="question"
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="e.g. Was this the right call?"
+            className="w-full rounded-xl bg-slate-800 border border-slate-700 text-slate-100
+                       placeholder-slate-600 px-4 py-3 text-sm focus:outline-none
+                       focus:ring-2 focus:ring-brand-500 transition"
+            onKeyDown={(e) => e.key === "Enter" && runAnalysis()}
+          />
+        </div>
+
+        {/* Strict Citation Mode toggle */}
+        <div className="flex items-center justify-between px-1">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-semibold text-slate-300">Strict Citation Mode</span>
+            <span className="text-[11px] text-slate-500">
+              {strictCitations
+                ? "Every claim will be grounded in transcript evidence"
+                : "Compact output — toggle ON for cited analysis"}
+            </span>
+          </div>
+          <button
+            role="switch"
+            aria-checked={strictCitations}
+            onClick={() => setStrictCitations((v) => !v)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2
+                        transition-colors duration-200 focus:outline-none focus:ring-2
+                        focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-slate-900
+                        ${strictCitations
+                          ? "border-amber-500 bg-amber-500"
+                          : "border-slate-600 bg-slate-700"}`}
+          >
+            <span
+              className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transition-transform duration-200
+                          ${strictCitations ? "translate-x-5" : "translate-x-0.5"}`}
+            />
+          </button>
+        </div>
+
+        <button
+          onClick={runAnalysis}
+          disabled={loading || !transcript.trim() || !question.trim()}
+          className="w-full py-3 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40
+                     disabled:cursor-not-allowed text-white font-semibold text-sm tracking-wide
+                     transition active:scale-95"
+        >
+          {loading ? "Running…" : "Run Autopsy"}
+        </button>
+
+        {error && (
+          <p className="text-red-400 text-xs bg-red-900/20 border border-red-800 rounded-xl px-4 py-2">
+            {error}
+          </p>
+        )}
+      </div>
+
+      {loading && <LoadingSpinner />}
+
+      {result && (
+        <div className="w-full max-w-2xl flex flex-col gap-4">
+
+          {/* Action bar */}
+          <div className="flex flex-wrap gap-2 justify-end items-center">
+            {activeCitations && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl
+                               bg-amber-950/50 border border-amber-800/60 text-amber-400 text-xs font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                Citation Mode
+              </span>
+            )}
+            <button
+              onClick={speaking ? stopAudio : playAudio}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-700
+                         text-slate-300 hover:text-white hover:border-slate-500 text-xs font-medium transition"
+            >
+              {speaking ? (
+                <><span className="w-2 h-2 rounded-sm bg-red-400 inline-block animate-pulse" />Stop</>
+              ) : (
+                <><svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                  <path d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.78a1.5 1.5 0 0 0 2.3 1.27l9.344-5.891a1.5 1.5 0 0 0 0-2.538L6.3 2.84Z" />
+                </svg>Listen</>
+              )}
+            </button>
+            <button
+              onClick={copySummary}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-700
+                         text-slate-300 hover:text-white hover:border-slate-500 text-xs font-medium transition"
+            >
+              {copied ? "✓ Copied" : "Copy Summary"}
+            </button>
+            <button
+              onClick={exportMarkdown}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-700
+                         text-slate-300 hover:text-white hover:border-slate-500 text-xs font-medium transition"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+                <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+              </svg>
+              Export
+            </button>
+          </div>
+
+          {/* 1 — Instant Verdict */}
+          <Card className="border-brand-500/40">
+            <SectionLabel text="Instant Verdict" color="text-brand-500" />
+            <p className="text-white font-semibold text-lg mb-3">
+              <CiteText text={result.verdict.recommendation} cite={activeCitations} />
+            </p>
+            <div className="flex flex-wrap gap-2 items-center">
+              <Badge
+                label={`${result.verdict.confidence} confidence`}
+                style={confidenceStyle[result.verdict.confidence] ?? confidenceStyle.Medium}
+              />
+              <CiteText text={result.verdict.why} cite={activeCitations} className="text-slate-400 text-sm" />
+            </div>
+          </Card>
+
+          {/* 2 — Decision Autopsy */}
+          <Card>
+            <SectionLabel text="Decision Autopsy" color="text-violet-400" />
+            <p className="text-slate-200 text-sm font-medium mb-1">
+              <CiteText text={result.autopsy.decision} cite={activeCitations} />
+            </p>
+            <div className="mb-4">
+              <Badge
+                label={result.autopsy.status}
+                style={statusStyle[result.autopsy.status] ?? statusStyle.Unresolved}
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <SectionLabel text="Top Risks" color="text-orange-400" />
+                <CitedBulletList items={result.autopsy.top_risks} color="text-orange-200" cite={activeCitations} />
+              </div>
+              <div>
+                <SectionLabel text="Missing Evidence" color="text-red-400" />
+                <CitedBulletList items={result.autopsy.missing_evidence} color="text-red-200" cite={activeCitations} />
+              </div>
+            </div>
+          </Card>
+
+          {/* 3 — Optimist */}
+          <Card>
+            <SectionLabel text="Optimist" color="text-emerald-400" />
+            <p className="text-slate-200 text-sm mb-3">
+              <CiteText text={result.optimist.summary} cite={activeCitations} />
+            </p>
+            <CitedBulletList items={result.optimist.evidence} color="text-emerald-200" cite={activeCitations} />
+          </Card>
+
+          {/* 4 — Pessimist */}
+          <Card>
+            <SectionLabel text="Pessimist" color="text-orange-400" />
+            <p className="text-slate-200 text-sm mb-3">
+              <CiteText text={result.pessimist.summary} cite={activeCitations} />
+            </p>
+            <CitedBulletList items={result.pessimist.evidence} color="text-orange-200" cite={activeCitations} />
+          </Card>
+
+          {/* 5 — Moderator */}
+          <Card>
+            <SectionLabel text="Moderator" color="text-sky-400" />
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-slate-500 mb-0.5">Core disagreement</p>
+                <p className="text-slate-200 text-sm">
+                  <CiteText text={result.moderator.disagreement} cite={activeCitations} />
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-0.5">Stronger side</p>
+                <p className="text-slate-200 text-sm">
+                  <CiteText text={result.moderator.stronger_side} cite={activeCitations} />
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-2">What settles it</p>
+                <CitedBulletList items={result.moderator.what_settles_it} color="text-sky-200" cite={activeCitations} />
+              </div>
+            </div>
+          </Card>
+
+          {/* 6 — Reaction Simulator */}
+          <Card>
+            <SectionLabel text="Reaction Simulator" color="text-fuchsia-400" />
+            <div className="grid grid-cols-1 gap-2.5">
+              {result.reactions.stakeholders.map((s, i) => (
+                <StakeholderCard key={i} s={s} cite={activeCitations} />
+              ))}
+            </div>
+          </Card>
+
+          {/* 7 — Decision Radar */}
+          <Card>
+            {/* Header row: label + status badge */}
+            <div className="flex items-center justify-between mb-1">
+              <SectionLabel text="Decision Radar" color="text-indigo-400" />
+              {(() => {
+                const s = radarStatusStyle[result.radar.status] ?? radarStatusStyle["Hold"];
+                return (
+                  <span className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded border ${s.badge}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                    {result.radar.status}
+                  </span>
+                );
+              })()}
+            </div>
+
+            {/* Radar chart — unchanged SVG */}
+            <RadarChart scores={result.radar.scores} />
+
+            {/* Score grid */}
+            <div className="mt-3 grid grid-cols-5 gap-1 text-center">
+              {RADAR_AXES.map((axis) => (
+                <div key={axis.key}>
+                  <p className="text-slate-500 text-[10px]">{axis.label}</p>
+                  <p className="text-white text-sm font-bold">{result.radar.scores[axis.key]}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Code-generated reason */}
+            <p className="mt-3 text-slate-400 text-xs text-center italic">
+              {result.radar.reason}
+            </p>
+
+            {/* Signal counts transparency row */}
+            <div className="mt-3 pt-3 border-t border-slate-800 flex flex-wrap justify-center gap-x-4 gap-y-1">
+              {[
+                { label: "Support",    count: result.radar.signal_counts.support,    color: "text-emerald-400" },
+                { label: "Risk",       count: result.radar.signal_counts.risk,       color: "text-orange-400"  },
+                { label: "Validation", count: result.radar.signal_counts.validation, color: "text-sky-400"     },
+                { label: "Unknown",    count: result.radar.signal_counts.unknown,    color: "text-slate-400"   },
+              ].map(({ label, count, color }) => (
+                <span key={label} className="flex items-center gap-1 text-[11px]">
+                  <span className={`font-semibold ${color}`}>{count}</span>
+                  <span className="text-slate-500">{label}</span>
+                </span>
+              ))}
+              <span className="flex items-center gap-1 text-[11px]">
+                <span className="font-semibold text-slate-400">{result.radar.signal_counts.support + result.radar.signal_counts.risk + result.radar.signal_counts.validation + result.radar.signal_counts.unknown}</span>
+                <span className="text-slate-600">signals total</span>
+              </span>
+            </div>
+          </Card>
+
+          {/* 8 — Rebuttal (collapsed) */}
+          <CollapsibleCard title="Rebuttal — Optimist responds" accent="text-slate-400" defaultOpen={false}>
+            <CitedBulletList items={result.rebuttal.bullets} color="text-slate-300" cite={activeCitations} />
+          </CollapsibleCard>
+
+          {/* 9 — Transcript viewer (collapsed) */}
+          {hasHighlights && (
+            <CollapsibleCard title="Transcript Viewer" accent="text-slate-500" defaultOpen={false}>
+              <div className="flex gap-3 mb-3 text-xs">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/50" />
+                  <span className="text-slate-500">Supporting evidence</span>
+                </span>
+              </div>
+              <div className="text-sm leading-relaxed whitespace-pre-wrap text-slate-300 bg-slate-800 rounded-xl p-4 max-h-64 overflow-y-auto">
+                {segments.map((seg, i) => (
+                  <span key={i} className={hlClass[seg.type]}>{seg.text}</span>
+                ))}
+              </div>
+            </CollapsibleCard>
+          )}
+
+        </div>
+      )}
+    </main>
+  );
+}
