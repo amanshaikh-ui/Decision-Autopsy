@@ -22,9 +22,22 @@ app = FastAPI(title="Decision Autopsy API", version="4.0.0")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+# Build the allowed origins list — always includes localhost for dev,
+# the configured FRONTEND_URL, and all known Vercel deployment domains.
+_ALLOWED_ORIGINS = list({
+    "http://localhost:3000",
+    "http://localhost:3001",
+    FRONTEND_URL,
+    # Vercel production + preview domains for this project
+    "https://decision-autopsy-one.vercel.app",
+    "https://decision-autopsy-git-main-aman7756068021s-projects.vercel.app",
+    "https://decision-autopsy-1718uvq4w-aman7756068021s-projects.vercel.app",
+})
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL, "http://localhost:3000"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://decision-autopsy.*\.vercel\.app",  # catches any future preview URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
