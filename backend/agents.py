@@ -346,10 +346,15 @@ def compute_radar_scores(signals: list, missing_evidence: list) -> dict:
 
     # ------------------------------------------------------------------ #
     # D. Uncertainty (0–10)
-    # More missing facts and unclassifiable signals → higher.
+    # Missing facts contribute 1 pt each (capped at 6); truly unclassifiable
+    # signals (type="unknown") contribute 2 pts each — they signal the LLM
+    # itself couldn't interpret the evidence, which is more alarming than a
+    # known gap. Multiplier was 2 per missing item previously, which caused
+    # 4 missing items alone to max out uncertainty regardless of signals.
     # ------------------------------------------------------------------ #
     unknown_count = sum(1 for s in signals if s.get("type") == "unknown")
-    unc = len(missing_evidence) * 2 + unknown_count
+    missing_contrib = min(len(missing_evidence), 6)   # cap at 6 so gaps alone can't max score
+    unc = missing_contrib + unknown_count * 2
     uncertainty = int(min(10, max(0, unc)))
 
     # ------------------------------------------------------------------ #
@@ -361,8 +366,8 @@ def compute_radar_scores(signals: list, missing_evidence: list) -> dict:
     strong_val_count  = _count(type="validation", strength="strong")
 
     ar = 10.0
-    ar -= strong_risk_count * 2.0
-    ar -= medium_risk_count * 1.0
+    ar -= min(strong_risk_count * 2.0, 6.0)   # cap strong-risk deduction at 6 so score never collapses to 0
+    ar -= min(medium_risk_count * 1.0, 3.0)   # cap medium-risk deduction at 3
     if uncertainty >= 6:
         ar -= 2.0
     if stakeholder_alignment <= 5:
