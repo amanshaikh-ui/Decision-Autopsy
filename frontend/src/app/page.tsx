@@ -334,12 +334,13 @@ function BulletList({ items, color = "text-slate-300" }: { items: string[]; colo
 }
 
 function SectionLabel({ text, color }: { text: string; color: string }) {
-  return <p className={`text-xs font-semibold uppercase tracking-widest mb-2 ${color}`}>{text}</p>;
+  return <p className={`text-[11px] font-bold uppercase tracking-[0.12em] mb-3 ${color}`}>{text}</p>;
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg ${className}`}>
+    <div className={`bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 shadow-xl shadow-black/20 ${className}`}
+         style={{ backdropFilter: "blur(8px)" }}>
       {children}
     </div>
   );
@@ -359,11 +360,15 @@ function CollapsibleCard({
   const [open, setOpen] = useState(defaultOpen);
   return (
     <Card>
-      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between">
-        <span className={`text-xs font-semibold uppercase tracking-widest ${accent}`}>{title}</span>
-        <span className="text-slate-500 text-xs">{open ? "▲ hide" : "▼ show"}</span>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between group">
+        <span className={`text-[11px] font-bold uppercase tracking-[0.12em] ${accent}`}>{title}</span>
+        <span className={`text-slate-600 text-xs transition group-hover:text-slate-400 ${open ? "rotate-180" : ""}`}>
+          <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 transition-transform duration-200" style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>
+            <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </span>
       </button>
-      {open && <div className="mt-4">{children}</div>}
+      {open && <div className="mt-4 border-t border-slate-800 pt-4">{children}</div>}
     </Card>
   );
 }
@@ -673,20 +678,44 @@ export default function Home() {
   const hasHighlights = result && result.autopsy.supporting_evidence.length > 0;
 
   return (
-    <main className="min-h-screen flex flex-col items-center px-4 py-12 gap-7">
+    <main className="min-h-screen flex flex-col items-center px-4 py-14 gap-8"
+          style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.12) 0%, transparent 70%), #020617" }}>
 
       {/* Header */}
-      <header className="text-center max-w-lg">
-        <h1 className="text-3xl font-bold tracking-tight text-white mb-1">
-          Decision <span className="text-brand-500">Autopsy</span>
+      <header className="text-center max-w-xl flex flex-col items-center gap-3">
+        {/* logo mark */}
+        <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center mb-1">
+          <svg viewBox="0 0 20 20" fill="none" className="w-5 h-5">
+            <circle cx="10" cy="10" r="7" stroke="#6366f1" strokeWidth="1.5"/>
+            <path d="M10 6v4l2.5 2.5" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <h1 className="text-4xl font-extrabold tracking-tight text-white">
+          Decision{" "}
+          <span className="bg-gradient-to-r from-brand-400 to-violet-400 bg-clip-text text-transparent">
+            Autopsy
+          </span>
         </h1>
-        <p className="text-slate-500 text-sm">Paste a transcript · Ask a question · Get a briefing</p>
+        <p className="text-slate-400 text-sm">AI-powered decision intelligence for teams</p>
+        <div className="flex items-center gap-2 mt-1">
+          {["Paste transcript", "Ask a question", "Get a briefing"].map((s, i) => (
+            <span key={s} className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 bg-slate-900 border border-slate-800 rounded-full px-3 py-1">{s}</span>
+              {i < 2 && <span className="text-slate-700 text-xs">→</span>}
+            </span>
+          ))}
+        </div>
       </header>
 
       {/* Input card */}
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+      <div className="w-full max-w-2xl bg-slate-900/80 border border-slate-800 rounded-3xl p-7 shadow-2xl shadow-black/40 space-y-5"
+           style={{ backdropFilter: "blur(12px)" }}>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="transcript" className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
+          <label htmlFor="transcript" className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-widest">
+            <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 text-slate-500">
+              <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M5 6h6M5 9h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
             Decision Transcript
           </label>
           <textarea
@@ -695,15 +724,20 @@ export default function Home() {
             value={transcript}
             onChange={(e) => setTranscript(e.target.value)}
             placeholder="Paste the transcript or description of the decision here…"
-            className="w-full rounded-xl bg-slate-800 border border-slate-700 text-slate-100
+            className="w-full rounded-2xl bg-slate-800/60 border border-slate-700/60 text-slate-100
                        placeholder-slate-600 px-4 py-3 text-sm resize-y focus:outline-none
-                       focus:ring-2 focus:ring-brand-500 transition"
+                       focus:ring-2 focus:ring-brand-500/70 focus:border-brand-500/50 transition"
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="question" className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
-            Question
+          <label htmlFor="question" className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-widest">
+            <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 text-slate-500">
+              <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M8 5.5C8 5.5 6.5 5.5 6.5 7C6.5 8.5 8 8.5 8 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <circle cx="8" cy="11.5" r="0.75" fill="currentColor"/>
+            </svg>
+            Your Question
           </label>
           <input
             id="question"
@@ -711,9 +745,9 @@ export default function Home() {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="e.g. Was this the right call?"
-            className="w-full rounded-xl bg-slate-800 border border-slate-700 text-slate-100
+            className="w-full rounded-2xl bg-slate-800/60 border border-slate-700/60 text-slate-100
                        placeholder-slate-600 px-4 py-3 text-sm focus:outline-none
-                       focus:ring-2 focus:ring-brand-500 transition"
+                       focus:ring-2 focus:ring-brand-500/70 focus:border-brand-500/50 transition"
             onKeyDown={(e) => e.key === "Enter" && runAnalysis()}
           />
         </div>
@@ -749,11 +783,26 @@ export default function Home() {
         <button
           onClick={runAnalysis}
           disabled={loading || !transcript.trim() || !question.trim()}
-          className="w-full py-3 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40
-                     disabled:cursor-not-allowed text-white font-semibold text-sm tracking-wide
-                     transition active:scale-95"
+          className="w-full py-3.5 rounded-2xl font-semibold text-sm tracking-wide transition-all
+                     active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed
+                     flex items-center justify-center gap-2.5
+                     bg-gradient-to-r from-brand-500 to-violet-500
+                     hover:from-brand-400 hover:to-violet-400
+                     text-white shadow-lg shadow-brand-500/20"
         >
-          {loading ? "Running…" : "Run Autopsy"}
+          {loading ? (
+            <>
+              <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              Running…
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.78a1.5 1.5 0 0 0 2.3 1.27l9.344-5.891a1.5 1.5 0 0 0 0-2.538L6.3 2.84Z"/>
+              </svg>
+              Run Autopsy
+            </>
+          )}
         </button>
 
         {error && (
@@ -769,45 +818,62 @@ export default function Home() {
         <div className="w-full max-w-2xl flex flex-col gap-4">
 
           {/* Action bar */}
-          <div className="flex flex-wrap gap-2 justify-end items-center">
-            {activeCitations && (
-              <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl
-                               bg-amber-950/50 border border-amber-800/60 text-amber-400 text-xs font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-                Citation Mode
-              </span>
-            )}
-            <button
-              onClick={speaking ? stopAudio : playAudio}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-700
-                         text-slate-300 hover:text-white hover:border-slate-500 text-xs font-medium transition"
-            >
-              {speaking ? (
-                <><span className="w-2 h-2 rounded-sm bg-red-400 inline-block animate-pulse" />Stop</>
-              ) : (
-                <><svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                  <path d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.78a1.5 1.5 0 0 0 2.3 1.27l9.344-5.891a1.5 1.5 0 0 0 0-2.538L6.3 2.84Z" />
-                </svg>Listen</>
+          <div className="flex flex-wrap gap-2 justify-between items-center bg-slate-900/60 border border-slate-800/60 rounded-2xl px-4 py-2.5"
+               style={{ backdropFilter: "blur(8px)" }}>
+            {/* Left: badges */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">Results</span>
+              {activeCitations && (
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full
+                                 bg-amber-950/60 border border-amber-800/60 text-amber-400 text-[11px] font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                  Citations ON
+                </span>
               )}
-            </button>
-            <button
-              onClick={copySummary}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-700
-                         text-slate-300 hover:text-white hover:border-slate-500 text-xs font-medium transition"
-            >
-              {copied ? "✓ Copied" : "Copy Summary"}
-            </button>
-            <button
-              onClick={exportMarkdown}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-700
-                         text-slate-300 hover:text-white hover:border-slate-500 text-xs font-medium transition"
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
-                <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
-              </svg>
-              Export
-            </button>
+            </div>
+            {/* Right: action buttons */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={speaking ? stopAudio : playAudio}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700/80
+                           text-slate-400 hover:text-white hover:border-slate-500 hover:bg-slate-800/60
+                           text-xs font-medium transition"
+              >
+                {speaking ? (
+                  <><span className="w-2 h-2 rounded-sm bg-red-400 inline-block animate-pulse" />Stop</>
+                ) : (
+                  <><svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                    <path d="M6.3 2.84A1.5 1.5 0 0 0 4 4.11v11.78a1.5 1.5 0 0 0 2.3 1.27l9.344-5.891a1.5 1.5 0 0 0 0-2.538L6.3 2.84Z" />
+                  </svg>Listen</>
+                )}
+              </button>
+              <button
+                onClick={copySummary}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700/80
+                           text-slate-400 hover:text-white hover:border-slate-500 hover:bg-slate-800/60
+                           text-xs font-medium transition"
+              >
+                {copied ? (
+                  <><svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 text-emerald-400"><path d="M3 8l3.5 3.5L13 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span className="text-emerald-400">Copied</span></>
+                ) : (
+                  <><svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5"><rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" stroke="currentColor" strokeWidth="1.5"/></svg>
+                  Copy</>
+                )}
+              </button>
+              <button
+                onClick={exportMarkdown}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700/80
+                           text-slate-400 hover:text-white hover:border-slate-500 hover:bg-slate-800/60
+                           text-xs font-medium transition"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                  <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+                  <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+                </svg>
+                Export
+              </button>
+            </div>
           </div>
 
           {/* KPI headline row */}
@@ -878,64 +944,78 @@ export default function Home() {
           })()}
 
           {/* 1 — Instant Verdict */}
-          <Card className="border-brand-500/40">
-            <SectionLabel text="Instant Verdict" color="text-brand-500" />
-            <p className="text-white font-semibold text-lg mb-3">
-              <CiteText text={result.verdict.recommendation} cite={activeCitations} />
-            </p>
-            <div className="flex flex-wrap gap-2 items-center">
-              <Badge
-                label={`${result.verdict.confidence} confidence`}
-                style={confidenceStyle[result.verdict.confidence] ?? confidenceStyle.Medium}
-              />
-              <CiteText text={result.verdict.why} cite={activeCitations} className="text-slate-400 text-sm" />
-            </div>
-          </Card>
+          <div className="relative">
+            <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-gradient-to-b from-brand-500 to-violet-500" />
+            <Card className="border-brand-500/30 pl-6">
+              <SectionLabel text="Instant Verdict" color="text-brand-400" />
+              <p className="text-white font-bold text-xl mb-3 leading-snug">
+                <CiteText text={result.verdict.recommendation} cite={activeCitations} />
+              </p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <Badge
+                  label={`${result.verdict.confidence} confidence`}
+                  style={confidenceStyle[result.verdict.confidence] ?? confidenceStyle.Medium}
+                />
+                <CiteText text={result.verdict.why} cite={activeCitations} className="text-slate-400 text-sm" />
+              </div>
+            </Card>
+          </div>
 
           {/* 2 — Decision Autopsy */}
-          <Card>
-            <SectionLabel text="Decision Autopsy" color="text-violet-400" />
-            <p className="text-slate-200 text-sm font-medium mb-1">
-              <CiteText text={result.autopsy.decision} cite={activeCitations} />
-            </p>
-            <div className="mb-4">
-              <Badge
-                label={result.autopsy.status}
-                style={statusStyle[result.autopsy.status] ?? statusStyle.Unresolved}
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <SectionLabel text="Top Risks" color="text-orange-400" />
-                <CitedBulletList items={result.autopsy.top_risks} color="text-orange-200" cite={activeCitations} />
+          <div className="relative">
+            <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-violet-500/60" />
+          <Card className="pl-6">
+              <SectionLabel text="Decision Autopsy" color="text-violet-400" />
+              <p className="text-slate-200 text-sm font-medium mb-1">
+                <CiteText text={result.autopsy.decision} cite={activeCitations} />
+              </p>
+              <div className="mb-4">
+                <Badge
+                  label={result.autopsy.status}
+                  style={statusStyle[result.autopsy.status] ?? statusStyle.Unresolved}
+                />
               </div>
-              <div>
-                <SectionLabel text="Missing Evidence" color="text-red-400" />
-                <CitedBulletList items={result.autopsy.missing_evidence} color="text-red-200" cite={activeCitations} />
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <SectionLabel text="Top Risks" color="text-orange-400" />
+                  <CitedBulletList items={result.autopsy.top_risks} color="text-orange-200" cite={activeCitations} />
+                </div>
+                <div>
+                  <SectionLabel text="Missing Evidence" color="text-red-400" />
+                  <CitedBulletList items={result.autopsy.missing_evidence} color="text-red-200" cite={activeCitations} />
+                </div>
               </div>
+            </Card>
+          </div>
+
+          {/* 3 & 4 — Optimist / Pessimist side by side on wide, stacked on mobile */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="relative">
+              <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-emerald-500/60" />
+              <Card className="pl-6 h-full">
+                <SectionLabel text="Optimist" color="text-emerald-400" />
+                <p className="text-slate-200 text-sm mb-3">
+                  <CiteText text={result.optimist.summary} cite={activeCitations} />
+                </p>
+                <CitedBulletList items={result.optimist.evidence} color="text-emerald-200" cite={activeCitations} />
+              </Card>
             </div>
-          </Card>
-
-          {/* 3 — Optimist */}
-          <Card>
-            <SectionLabel text="Optimist" color="text-emerald-400" />
-            <p className="text-slate-200 text-sm mb-3">
-              <CiteText text={result.optimist.summary} cite={activeCitations} />
-            </p>
-            <CitedBulletList items={result.optimist.evidence} color="text-emerald-200" cite={activeCitations} />
-          </Card>
-
-          {/* 4 — Pessimist */}
-          <Card>
-            <SectionLabel text="Pessimist" color="text-orange-400" />
-            <p className="text-slate-200 text-sm mb-3">
-              <CiteText text={result.pessimist.summary} cite={activeCitations} />
-            </p>
-            <CitedBulletList items={result.pessimist.evidence} color="text-orange-200" cite={activeCitations} />
-          </Card>
+            <div className="relative">
+              <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-orange-500/60" />
+              <Card className="pl-6 h-full">
+                <SectionLabel text="Pessimist" color="text-orange-400" />
+                <p className="text-slate-200 text-sm mb-3">
+                  <CiteText text={result.pessimist.summary} cite={activeCitations} />
+                </p>
+                <CitedBulletList items={result.pessimist.evidence} color="text-orange-200" cite={activeCitations} />
+              </Card>
+            </div>
+          </div>
 
           {/* 5 — Moderator */}
-          <Card>
+          <div className="relative">
+            <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-sky-500/60" />
+          <Card className="pl-6">
             <SectionLabel text="Moderator" color="text-sky-400" />
             <div className="space-y-3">
               <div>
@@ -956,16 +1036,20 @@ export default function Home() {
               </div>
             </div>
           </Card>
+          </div>
 
           {/* 6 — Reaction Simulator */}
-          <Card>
-            <SectionLabel text="Reaction Simulator" color="text-fuchsia-400" />
-            <div className="grid grid-cols-1 gap-2.5">
-              {result.reactions.stakeholders.map((s, i) => (
-                <StakeholderCard key={i} s={s} cite={activeCitations} />
-              ))}
-            </div>
-          </Card>
+          <div className="relative">
+            <div className="absolute left-0 top-4 bottom-4 w-0.5 rounded-full bg-fuchsia-500/60" />
+            <Card className="pl-6">
+              <SectionLabel text="Reaction Simulator" color="text-fuchsia-400" />
+              <div className="grid grid-cols-1 gap-2.5">
+                {result.reactions.stakeholders.map((s, i) => (
+                  <StakeholderCard key={i} s={s} cite={activeCitations} />
+                ))}
+              </div>
+            </Card>
+          </div>
 
           {/* 7 — Decision Radar */}
           <Card>
