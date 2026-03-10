@@ -810,6 +810,73 @@ export default function Home() {
             </button>
           </div>
 
+          {/* KPI headline row */}
+          {(() => {
+            const s = result.radar.scores;
+            const status = result.radar.status;
+            const statusKpi =
+              status === "Go"                   ? { bg: "bg-emerald-500/10", border: "border-emerald-600/40", text: "text-emerald-400", dot: "bg-emerald-400" }
+              : status === "Proceed with caution" ? { bg: "bg-amber-500/10",   border: "border-amber-600/40",   text: "text-amber-400",   dot: "bg-amber-400"   }
+              : status === "Hold"                 ? { bg: "bg-rose-500/10",    border: "border-rose-600/40",    text: "text-rose-400",    dot: "bg-rose-400"    }
+              :                                    { bg: "bg-slate-800",       border: "border-slate-700",      text: "text-slate-400",   dot: "bg-slate-400"   };
+
+            const kpis = [
+              {
+                label: "Action Readiness",
+                value: `${s.action_readiness}/10`,
+                sub: s.action_readiness >= 7 ? "High" : s.action_readiness >= 5 ? "Moderate" : "Low",
+                subColor: s.action_readiness >= 7 ? "text-emerald-400" : s.action_readiness >= 5 ? "text-amber-400" : "text-rose-400",
+                bar: s.action_readiness / 10,
+                barColor: s.action_readiness >= 7 ? "bg-emerald-500" : s.action_readiness >= 5 ? "bg-amber-500" : "bg-rose-500",
+              },
+              {
+                label: "Risk Level",
+                value: `${s.risk_level}/10`,
+                sub: s.risk_level >= 7 ? "High" : s.risk_level >= 4 ? "Moderate" : "Low",
+                subColor: s.risk_level >= 7 ? "text-rose-400" : s.risk_level >= 4 ? "text-amber-400" : "text-emerald-400",
+                bar: s.risk_level / 10,
+                barColor: s.risk_level >= 7 ? "bg-rose-500" : s.risk_level >= 4 ? "bg-amber-500" : "bg-emerald-500",
+              },
+              {
+                label: "Evidence Strength",
+                value: `${s.evidence_strength}/10`,
+                sub: s.evidence_strength >= 7 ? "Strong" : s.evidence_strength >= 4 ? "Moderate" : "Weak",
+                subColor: s.evidence_strength >= 7 ? "text-emerald-400" : s.evidence_strength >= 4 ? "text-amber-400" : "text-rose-400",
+                bar: s.evidence_strength / 10,
+                barColor: s.evidence_strength >= 7 ? "bg-emerald-500" : s.evidence_strength >= 4 ? "bg-amber-500" : "bg-rose-500",
+              },
+            ];
+
+            return (
+              <div className="grid grid-cols-2 gap-3">
+                {/* Status card — spans full width on small, left column on larger */}
+                <div className={`col-span-2 sm:col-span-1 rounded-2xl border p-4 flex flex-col justify-between ${statusKpi.bg} ${statusKpi.border}`}>
+                  <p className="text-slate-400 text-xs font-medium uppercase tracking-widest mb-2">Decision Status</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusKpi.dot}`} />
+                    <span className={`text-xl font-bold ${statusKpi.text}`}>{status}</span>
+                  </div>
+                  <p className="text-slate-500 text-xs mt-2 leading-relaxed">{result.radar.reason}</p>
+                </div>
+
+                {/* 3 metric cards */}
+                {kpis.map((k) => (
+                  <div key={k.label} className="rounded-2xl border border-slate-800 bg-slate-900 p-4 flex flex-col gap-2">
+                    <p className="text-slate-400 text-xs font-medium uppercase tracking-widest">{k.label}</p>
+                    <div className="flex items-end justify-between">
+                      <span className="text-2xl font-bold text-white">{k.value}</span>
+                      <span className={`text-xs font-semibold ${k.subColor}`}>{k.sub}</span>
+                    </div>
+                    {/* progress bar */}
+                    <div className="h-1 rounded-full bg-slate-800 overflow-hidden">
+                      <div className={`h-full rounded-full ${k.barColor}`} style={{ width: `${k.bar * 100}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
           {/* 1 — Instant Verdict */}
           <Card className="border-brand-500/40">
             <SectionLabel text="Instant Verdict" color="text-brand-500" />
