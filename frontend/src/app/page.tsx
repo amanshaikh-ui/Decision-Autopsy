@@ -606,6 +606,8 @@ export default function Home() {
   const [transcript, setTranscript] = useState("");
   const [question, setQuestion] = useState("");
   const [strictCitations, setStrictCitations] = useState(false);
+  const [tone, setTone] = useState(3);          // 1=Polite … 5=Savage
+  const [activeTone, setActiveTone] = useState(3); // tone used for current result
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [activeCitations, setActiveCitations] = useState(false); // reflects what the result was generated with
@@ -624,7 +626,7 @@ export default function Home() {
       const res = await fetch(`${API_URL}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, question, strict_citations: strictCitations }),
+        body: JSON.stringify({ transcript, question, strict_citations: strictCitations, tone }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -632,6 +634,7 @@ export default function Home() {
       }
       setResult(await res.json());
       setActiveCitations(strictCitations);
+      setActiveTone(tone);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
@@ -752,6 +755,56 @@ export default function Home() {
           />
         </div>
 
+        {/* Tone slider */}
+        {(() => {
+          const TONE_LABELS = ["", "Polite", "Balanced", "Blunt", "Harsh", "Savage"];
+          const TONE_COLORS = ["", "text-sky-400", "text-emerald-400", "text-slate-300", "text-orange-400", "text-red-400"];
+          const TONE_TRACK  = ["", "bg-sky-500", "bg-emerald-500", "bg-slate-500", "bg-orange-500", "bg-red-500"];
+          return (
+            <div className="flex flex-col gap-2 px-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-300">Tone</span>
+                  <span className={`text-xs font-bold transition-colors ${TONE_COLORS[tone]}`}>
+                    {TONE_LABELS[tone]}
+                    {tone === 5 && " 🔥"}
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-500">
+                  {tone <= 2 ? "Diplomatic and measured"
+                    : tone === 3 ? "Direct, no fluff"
+                    : tone === 4 ? "Sharp and unsparing"
+                    : "Brutally honest, no mercy"}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-slate-600 shrink-0">Polite</span>
+                <div className="relative flex-1 h-5 flex items-center">
+                  <div className="w-full h-1 rounded-full bg-slate-800">
+                    <div
+                      className={`h-full rounded-full transition-all ${TONE_TRACK[tone]}`}
+                      style={{ width: `${((tone - 1) / 4) * 100}%` }}
+                    />
+                  </div>
+                  <input
+                    type="range" min={1} max={5} step={1} value={tone}
+                    onChange={(e) => setTone(Number(e.target.value))}
+                    className="absolute inset-0 w-full opacity-0 cursor-pointer h-5"
+                    aria-label="Tone slider"
+                  />
+                  {/* tick marks */}
+                  <div className="absolute inset-x-0 flex justify-between px-0 pointer-events-none">
+                    {[1,2,3,4,5].map((v) => (
+                      <span key={v} className={`w-1.5 h-1.5 rounded-full transition-colors ${v <= tone ? TONE_TRACK[tone] : "bg-slate-700"}`} />
+                    ))}
+                  </div>
+                </div>
+                <span className="text-[10px] text-slate-600 shrink-0">Savage</span>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Strict Citation Mode toggle */}
         <div className="flex items-center justify-between px-1">
           <div className="flex flex-col gap-0.5">
@@ -821,16 +874,25 @@ export default function Home() {
           <div className="flex flex-wrap gap-2 justify-between items-center bg-slate-900/60 border border-slate-800/60 rounded-2xl px-4 py-2.5"
                style={{ backdropFilter: "blur(8px)" }}>
             {/* Left: badges */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">Results</span>
-              {activeCitations && (
-                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full
-                                 bg-amber-950/60 border border-amber-800/60 text-amber-400 text-[11px] font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-                  Citations ON
-                </span>
-              )}
-            </div>
+            {(() => {
+              const TONE_LABELS = ["", "Polite", "Balanced", "Blunt", "Harsh", "Savage"];
+              const TONE_BADGE  = ["", "bg-sky-950/60 border-sky-800/60 text-sky-400", "bg-emerald-950/60 border-emerald-800/60 text-emerald-400", "bg-slate-800/60 border-slate-700/60 text-slate-300", "bg-orange-950/60 border-orange-800/60 text-orange-400", "bg-red-950/60 border-red-800/60 text-red-400"];
+              return (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">Results</span>
+                  <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${TONE_BADGE[activeTone]}`}>
+                    {activeTone === 5 ? "🔥" : "🎚️"} {TONE_LABELS[activeTone]}
+                  </span>
+                  {activeCitations && (
+                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full
+                                     bg-amber-950/60 border border-amber-800/60 text-amber-400 text-[11px] font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                      Citations ON
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
             {/* Right: action buttons */}
             <div className="flex items-center gap-1.5">
               <button

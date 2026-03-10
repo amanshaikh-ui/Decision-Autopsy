@@ -23,6 +23,7 @@ from prompts import (
     REACTION_SIM_SYSTEM, REACTION_SIM_USER,
     EVIDENCE_EXTRACTOR_SYSTEM, EVIDENCE_EXTRACTOR_USER,
     CITATION_RULES,
+    get_tone_instruction,
     fmt_for_moderator,
 )
 
@@ -157,22 +158,24 @@ def run_autopsy_agent(
 
 def run_optimist_agent(
     transcript: str, question: str, decision: str,
-    strict_citations: bool = False, indexed_tx: str = ""
+    strict_citations: bool = False, indexed_tx: str = "", tone: int = 3
 ) -> dict:
     tx = _tx(transcript, strict_citations, indexed_tx)
+    system = OPTIMIST_SYSTEM + "\n\n" + get_tone_instruction(tone)
     user = _cite(
         OPTIMIST_USER.format(transcript=tx, question=question, decision=decision),
         strict_citations,
     )
-    raw = _chat(OPTIMIST_SYSTEM, user)
+    raw = _chat(system, user)
     return _parse_json(raw)
 
 
 def run_pessimist_agent(
     transcript: str, question: str, decision: str, optimist: dict,
-    strict_citations: bool = False, indexed_tx: str = ""
+    strict_citations: bool = False, indexed_tx: str = "", tone: int = 3
 ) -> dict:
     tx = _tx(transcript, strict_citations, indexed_tx)
+    system = PESSIMIST_SYSTEM + "\n\n" + get_tone_instruction(tone)
     user = _cite(
         PESSIMIST_USER.format(
             transcript=tx,
@@ -182,7 +185,7 @@ def run_pessimist_agent(
         ),
         strict_citations,
     )
-    raw = _chat(PESSIMIST_SYSTEM, user)
+    raw = _chat(system, user)
     return _parse_json(raw)
 
 
@@ -205,11 +208,12 @@ def run_rebuttal_agent(
 
 def run_moderator_agent(
     autopsy: dict, optimist: dict, pessimist: dict, rebuttal: dict,
-    strict_citations: bool = False
+    strict_citations: bool = False, tone: int = 3
 ) -> dict:
+    system = MODERATOR_SYSTEM + "\n\n" + get_tone_instruction(tone)
     ctx = fmt_for_moderator(autopsy, optimist, pessimist, rebuttal)
     user = _cite(MODERATOR_USER.format(**ctx), strict_citations)
-    raw = _chat(MODERATOR_SYSTEM, user, temperature=0.3)
+    raw = _chat(system, user, temperature=0.3)
     return _parse_json(raw)
 
 

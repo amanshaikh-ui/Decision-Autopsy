@@ -52,6 +52,7 @@ class AnalyzeRequest(BaseModel):
     transcript: str
     question: str
     strict_citations: bool = False  # default OFF — fully backward-compatible
+    tone: int = 3                   # 1=Polite … 5=Savage, default=Blunt/balanced
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +157,8 @@ def analyze(req: AnalyzeRequest):
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
     try:
-        sc = req.strict_citations
+        sc   = req.strict_citations
+        tone = max(1, min(5, req.tone))  # clamp to valid range
 
         # Always build the indexed transcript — needed by the evidence extractor
         # and optionally by citation-mode agents.
@@ -194,14 +196,14 @@ def analyze(req: AnalyzeRequest):
         # 3. Optimist
         raw_optimist = run_optimist_agent(
             req.transcript, req.question, decision,
-            strict_citations=sc, indexed_tx=citation_tx
+            strict_citations=sc, indexed_tx=citation_tx, tone=tone
         )
         optimist = SideData(**raw_optimist)
 
         # 4. Pessimist
         raw_pessimist = run_pessimist_agent(
             req.transcript, req.question, decision, raw_optimist,
-            strict_citations=sc, indexed_tx=citation_tx
+            strict_citations=sc, indexed_tx=citation_tx, tone=tone
         )
         pessimist = SideData(**raw_pessimist)
 
@@ -215,6 +217,7 @@ def analyze(req: AnalyzeRequest):
         # 6. Moderator
         raw_moderator = run_moderator_agent(
             raw_autopsy, raw_optimist, raw_pessimist, raw_rebuttal,
+            tone=tone,
             strict_citations=sc
         )
         moderator = ModeratorData(**raw_moderator)

@@ -33,6 +33,43 @@ CRITICAL JSON SAFETY RULES (must follow or output breaks):
 """
 
 # ---------------------------------------------------------------------------
+# Tone slider — injected into Optimist, Pessimist, and Moderator system prompts
+# ---------------------------------------------------------------------------
+
+TONE_INSTRUCTIONS: dict[int, str] = {
+    1: (
+        "TONE — Polite: Be diplomatic, measured, and constructive. "
+        "Acknowledge the other side's perspective. Soften criticism. "
+        "Use professional, respectful language throughout."
+    ),
+    2: (
+        "TONE — Balanced: Be direct and fair. State your case clearly "
+        "without personal attacks. Acknowledge counterpoints briefly."
+    ),
+    3: (
+        "TONE — Blunt: Get straight to the point. No sugarcoating, but no theatrics either. "
+        "Short punchy sentences. Call out weak arguments plainly."
+    ),
+    4: (
+        "TONE — Harsh: Be aggressive and unsparing. Expose every flaw. "
+        "Do not soften criticism. Use sharp, pointed language. "
+        "Treat weak evidence as inexcusable."
+    ),
+    5: (
+        "TONE — Savage: Be brutally, mercilessly honest. Skewer weak arguments. "
+        "Use biting, provocative language. No diplomacy whatsoever. "
+        "Make every sentence sting. If it is bad, say it is bad — loudly."
+    ),
+}
+
+
+def get_tone_instruction(tone: int) -> str:
+    """Return the tone instruction string for a given tone level (1–5)."""
+    level = max(1, min(5, tone))  # clamp to valid range
+    return TONE_INSTRUCTIONS[level]
+
+
+# ---------------------------------------------------------------------------
 # Global rules injected into every system prompt
 # ---------------------------------------------------------------------------
 
