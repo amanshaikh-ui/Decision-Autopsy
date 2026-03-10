@@ -602,6 +602,20 @@ function RadarChart({ scores }: { scores: RadarScores }) {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+const EXAMPLE_TRANSCRIPT = `CEO: We promised investors a Q1 launch. It's already March. We need to ship Friday.
+Engineering Lead: We have 14 open bugs. Three of them are critical — one causes data loss on Android.
+Product Manager: The core user journey works fine. The bugs are edge cases. Beta users gave us 4.2 stars.
+Engineering Lead: Edge cases that affect 20% of Android users are not edge cases. That's one in five people losing their data.
+Sales Lead: The client signed based on a Friday launch date. If we slip, we risk the contract.
+Designer: The onboarding flow still has usability issues. Our own testers got confused at step 3.
+CEO: We can patch the data loss bug tonight. Ship Friday, hotfix Saturday.
+Engineering Lead: We've said "hotfix tomorrow" three times this sprint. It never happens.
+QA Lead: We haven't done a full regression test since the last major refactor two weeks ago.
+Product Manager: Competitors are launching next month. First-mover advantage is real.
+Engineering Lead: Shipping broken software is not first-mover advantage. It's first-mover liability.`;
+
+const EXAMPLE_QUESTION = "Should we launch the product this Friday?";
+
 export default function Home() {
   const [transcript, setTranscript] = useState("");
   const [question, setQuestion] = useState("");
@@ -714,13 +728,27 @@ export default function Home() {
       <div className="w-full max-w-2xl bg-slate-900/80 border border-slate-800 rounded-3xl p-7 shadow-2xl shadow-black/40 space-y-5"
            style={{ backdropFilter: "blur(12px)" }}>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="transcript" className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-widest">
-            <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 text-slate-500">
-              <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-              <path d="M5 6h6M5 9h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-            Decision Transcript
-          </label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="transcript" className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-widest">
+              <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 text-slate-500">
+                <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M5 6h6M5 9h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              Decision Transcript
+            </label>
+            <button
+              type="button"
+              onClick={() => { setTranscript(EXAMPLE_TRANSCRIPT); setQuestion(EXAMPLE_QUESTION); }}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-brand-400
+                         hover:text-brand-300 transition px-2 py-1 rounded-lg
+                         bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20"
+            >
+              <svg viewBox="0 0 16 16" fill="none" className="w-3 h-3">
+                <path d="M2 8h12M8 2l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Try an example
+            </button>
+          </div>
           <textarea
             id="transcript"
             rows={8}
