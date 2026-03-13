@@ -24,6 +24,11 @@ For every major claim in your output:
 - Stay concise; citations should not make the output longer than necessary
 
 CRITICAL JSON SAFETY RULES (must follow or output breaks):
+- Every JSON field value MUST be wrapped in double quotes — this includes values that contain citations
+- Citations go INSIDE the double-quoted string, never outside
+- Correct:   "disagreement": "CEO (line 7): 'we cannot delay the launch'"
+- Incorrect: "disagreement": CEO (line 7): 'we cannot delay the launch'
+- The outer double quotes are JSON syntax. The inner single quotes are citation syntax. Both are required.
 - Never include a raw newline character (\\n) inside a JSON string value
 - Never include unescaped double quotes inside a JSON string value
 - All JSON string values must stay on a single line
