@@ -1,88 +1,66 @@
 # Decision Autopsy
 
-> AI-powered post-mortem analysis for past decisions.
+> Paste a meeting transcript. Ask one question. Get a full AI-powered decision briefing in under a minute.
 
-Paste a decision transcript, ask a question, and get a full structured analysis:
-
-| Agent | Role |
-|---|---|
-| **Decision Autopsy** | Identifies the decision, supporting evidence, ignored risks, and missing evidence |
-| **Optimist** | Makes the strongest case that the decision was reasonable |
-| **Pessimist** | Makes the strongest case that the decision was flawed |
-| **Rebuttal** | Optimist responds to the Pessimist's critique |
-| **Moderator** | Neutral synthesis and overall verdict |
-
-Evidence cited by agents is **highlighted in the transcript viewer** (green = supporting, orange = ignored risk). All output can be **exported as Markdown**.
+🔗 **Live Demo:** https://decision-autopsy-one.vercel.app
 
 ---
 
-## Project Structure
+## What It Does
 
-```
-decision-autopsy/
-├── backend/
-│   ├── app.py            FastAPI routes + Pydantic models
-│   ├── agents.py         LLM agent functions (OpenAI)
-│   ├── prompts.py        All prompt templates
-│   ├── retriever.py      RAG retrieval stub (pluggable)
-│   ├── requirements.txt
-│   ├── render.yaml       Render deployment config
-│   └── .env.example
-└── frontend/
-    ├── src/app/
-    │   ├── layout.tsx
-    │   ├── page.tsx      Full interactive UI
-    │   └── globals.css
-    ├── vercel.json       Vercel deployment config
-    └── .env.local.example
-```
+Most meetings end with no clear answer. Decision Autopsy takes the transcript of that meeting and runs it through 7 specialized AI agents — each one analyzing the same conversation from a different angle — and delivers a structured intelligence briefing.
+
+---
+
+## Key Features
+
+| Feature | Description |
+|---|---|
+| **7-Agent Pipeline** | Autopsy → Evidence Extractor → Optimist → Pessimist → Rebuttal → Moderator → Reaction Simulator |
+| **Tone Slider** | Drag from Polite to Savage — changes how aggressively agents argue |
+| **Decision Radar** | 5-axis chart with scores computed by Python formulas, not AI guesses |
+| **KPI Cards** | Decision Status, Action Readiness, Risk Level, Evidence Strength at a glance |
+| **Strict Citation Mode** | Every claim backed by `Speaker (line N): 'quote'` — no hallucination |
+| **Reaction Simulator** | Realistic stakeholder reactions inferred from transcript context |
+| **Export as Markdown** | Download the full briefing as a clean `.md` file |
+| **Text-to-Speech** | Listen to the full briefing hands-free |
+| **Live Progress Indicator** | See each of the 9 agent steps completing in real time |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 15, Tailwind CSS, TypeScript |
+| Backend | FastAPI, Python 3.11+ |
+| AI | Groq API — LLaMA 3.3 70B |
+| Hosting | Vercel (frontend) + Render (backend) |
 
 ---
 
 ## Local Development
 
-### Prerequisites
-
-- Python 3.11+
-- Node.js 20+
-- OpenAI API key
-
 ### Backend
 
 ```bash
 cd backend
-
 python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
-
+.venv\Scripts\activate        # Windows
+source .venv/bin/activate     # macOS/Linux
 pip install -r requirements.txt
-
-# Configure environment
-copy .env.example .env      # Windows
-cp .env.example .env        # macOS/Linux
-# Open .env and set OPENAI_API_KEY
-
-uvicorn app:app --reload
+cp .env.example .env          # add your GROQ_API_KEY
+python -m uvicorn app:app --reload
 ```
 
 API available at **http://localhost:8000**
-Interactive docs at **http://localhost:8000/docs**
 
 ### Frontend
 
 ```bash
 cd frontend
-
 npm install
-
-# Configure environment
-copy .env.local.example .env.local      # Windows
-cp .env.local.example .env.local        # macOS/Linux
-# NEXT_PUBLIC_API_URL defaults to http://localhost:8000
-
+# create .env.local and add: NEXT_PUBLIC_API_URL=http://localhost:8000
 npm run dev
 ```
 
@@ -92,49 +70,7 @@ UI available at **http://localhost:3000**
 
 ## Deployment
 
-### Backend → Render
-
-1. Push this repo to GitHub.
-2. Go to [render.com](https://render.com) → **New → Web Service**.
-3. Connect your GitHub repo and select the **`backend`** folder as the root directory.
-4. Use these settings:
-
-   | Setting | Value |
-   |---|---|
-   | Runtime | Python |
-   | Build Command | `pip install -r requirements.txt` |
-   | Start Command | `uvicorn app:app --host 0.0.0.0 --port 10000` |
-
-5. Add environment variables in the Render dashboard:
-
-   | Key | Value |
-   |---|---|
-   | `OPENAI_API_KEY` | `sk-...` |
-   | `FRONTEND_URL` | Your Vercel URL (add after deploying frontend) |
-
-6. Deploy. Note the Render service URL (e.g. `https://decision-autopsy-backend.onrender.com`).
-
-### Frontend → Vercel
-
-1. Go to [vercel.com](https://vercel.com) → **Add New Project**.
-2. Import your GitHub repo.
-3. Set **Root Directory** to `frontend`.
-4. Add environment variable:
-
-   | Key | Value |
-   |---|---|
-   | `NEXT_PUBLIC_API_URL` | Your Render backend URL |
-
-5. Deploy.
-6. Copy the Vercel URL and paste it as `FRONTEND_URL` in your Render environment variables, then redeploy the backend.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js 16, Tailwind CSS, TypeScript |
-| Backend | FastAPI, Uvicorn, Python 3.11+ |
-| AI | OpenAI API (GPT-4o) |
-| Hosting | Vercel (frontend) + Render (backend) |
+- **Backend** → Render (root directory: `backend`, start command: `uvicorn app:app --host 0.0.0.0 --port 10000`)
+- **Frontend** → Vercel (root directory: `frontend`)
+- Set `GROQ_API_KEY` + `FRONTEND_URL` in Render environment variables
+- Set `NEXT_PUBLIC_API_URL` in Vercel environment variables
