@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,27 +96,34 @@ const radarStatusStyle: Record<string, { badge: string; dot: string }> = {
 
 // Matches: Speaker (line N): "snippet" or Speaker (line N): 'snippet'
 const CITE_RE = /([A-Za-z][A-Za-z\s,.']{1,40}?\(line \d+\):\s*(?:"[^"]*"|'[^']*'))/g;
+const LINE_NUM_RE = /\(line (\d+)\)/;
 
-function renderWithCitations(text: string): React.ReactNode {
+function renderWithCitations(
+  text: string,
+  onCiteClick?: (line: number) => void
+): React.ReactNode {
   if (!text.includes("(line ")) return <span>{text}</span>;
   const parts = text.split(CITE_RE);
   return (
     <>
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
+      {parts.map((part, i) => {
+        if (i % 2 !== 1) return <span key={i}>{part}</span>;
+        const lineMatch = part.match(LINE_NUM_RE);
+        const lineNum = lineMatch ? parseInt(lineMatch[1], 10) : null;
+        return (
           <cite
             key={i}
-            title="Transcript citation"
-            className="not-italic font-mono text-[10px] text-amber-400/80 bg-amber-950/40
+            title={lineNum ? `Click to jump to line ${lineNum} in transcript` : "Transcript citation"}
+            onClick={lineNum && onCiteClick ? () => onCiteClick(lineNum) : undefined}
+            className={`not-italic font-mono text-[10px] text-amber-400/80 bg-amber-950/40
                        border border-amber-800/40 rounded px-1 mx-0.5 inline-block leading-normal
-                       whitespace-nowrap align-middle"
+                       whitespace-nowrap align-middle
+                       ${lineNum && onCiteClick ? "cursor-pointer hover:bg-amber-900/60 hover:text-amber-300 hover:border-amber-600 transition-colors" : ""}`}
           >
             {part}
           </cite>
-        ) : (
-          <span key={i}>{part}</span>
-        )
-      )}
+        );
+      })}
     </>
   );
 }
@@ -126,12 +133,18 @@ function CiteText({
   text,
   cite,
   className = "",
+  onCiteClick,
 }: {
   text: string;
   cite: boolean;
   className?: string;
+  onCiteClick?: (line: number) => void;
 }) {
-  return <span className={className}>{cite ? renderWithCitations(text) : text}</span>;
+  return (
+    <span className={className}>
+      {cite ? renderWithCitations(text, onCiteClick) : text}
+    </span>
+  );
 }
 
 // CitedBulletList: like BulletList but citation-aware per item
@@ -139,10 +152,12 @@ function CitedBulletList({
   items,
   color = "text-slate-300",
   cite = false,
+  onCiteClick,
 }: {
   items: string[];
   color?: string;
   cite?: boolean;
+  onCiteClick?: (line: number) => void;
 }) {
   if (!items.length) return <p className="text-slate-500 text-xs italic">None identified.</p>;
   return (
@@ -150,7 +165,7 @@ function CitedBulletList({
       {items.map((item, i) => (
         <li key={i} className={`text-sm flex gap-2 ${color}`}>
           <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current shrink-0 opacity-60" />
-          <span>{cite ? renderWithCitations(item) : item}</span>
+          <span>{cite ? renderWithCitations(item, onCiteClick) : item}</span>
         </li>
       ))}
     </ul>
@@ -337,14 +352,18 @@ function SectionLabel({ text, color }: { text: string; color: string }) {
   return <p className={`text-[11px] font-bold uppercase tracking-[0.12em] mb-3 ${color}`}>{text}</p>;
 }
 
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 shadow-xl shadow-black/20 ${className}`}
-         style={{ backdropFilter: "blur(8px)" }}>
+const Card = React.forwardRef<HTMLDivElement, { children: React.ReactNode; className?: string }>(
+  ({ children, className = "" }, ref) => (
+    <div
+      ref={ref}
+      className={`bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 shadow-xl shadow-black/20 ${className}`}
+      style={{ backdropFilter: "blur(8px)" }}
+    >
       {children}
     </div>
-  );
-}
+  )
+);
+Card.displayName = "Card";
 
 function CollapsibleCard({
   title,
@@ -628,7 +647,11 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [highlightedLine, setHighlightedLine] = useState<number | null>(null);
+  const [transcriptViewerOpen, setTranscriptViewerOpen] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const transcriptViewerRef = useRef<HTMLDivElement>(null);
+  const lineRefs = useRef<Record<number, HTMLElement | null>>({});
 
   async function runAnalysis() {
     if (!transcript.trim() || !question.trim()) return;
@@ -678,6 +701,22 @@ export default function Home() {
     await navigator.clipboard.writeText(buildCopySummary(question, result));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  function jumpToLine(lineNum: number) {
+    setTranscriptViewerOpen(true);
+    setHighlightedLine(lineNum);
+    // Scroll after the viewer has opened and rendered
+    setTimeout(() => {
+      const el = lineRefs.current[lineNum];
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      } else {
+        transcriptViewerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      // Clear flash after 2.5 seconds
+      setTimeout(() => setHighlightedLine(null), 2500);
+    }, 120);
   }
 
   function exportMarkdown() {
@@ -886,6 +925,22 @@ export default function Home() {
           )}
         </button>
 
+        {/* Short transcript warning */}
+        {transcript.trim() && transcript.trim().split("\n").filter(l => l.trim()).length < 4 && (
+          <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-amber-950/40 border border-amber-800/50">
+            <svg viewBox="0 0 16 16" fill="none" className="w-4 h-4 text-amber-400 shrink-0 mt-0.5">
+              <path d="M8 2L14 13H2L8 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M8 6v3M8 11v0.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <div>
+              <p className="text-amber-400 text-xs font-semibold">Short transcript detected</p>
+              <p className="text-amber-600 text-[11px] mt-0.5">
+                Only {transcript.trim().split("\n").filter(l => l.trim()).length} lines found. The analysis works best with 6+ lines of conversation. Results may be limited.
+              </p>
+            </div>
+          </div>
+        )}
+
         {error && (
           <p className="text-red-400 text-xs bg-red-900/20 border border-red-800 rounded-xl px-4 py-2">
             {error}
@@ -1039,14 +1094,14 @@ export default function Home() {
             <Card className="border-brand-500/30 pl-6">
               <SectionLabel text="Instant Verdict" color="text-brand-400" />
               <p className="text-white font-bold text-xl mb-3 leading-snug">
-                <CiteText text={result.verdict.recommendation} cite={activeCitations} />
+                <CiteText text={result.verdict.recommendation} cite={activeCitations} onCiteClick={jumpToLine} />
               </p>
               <div className="flex flex-wrap gap-2 items-center">
                 <Badge
                   label={`${result.verdict.confidence} confidence`}
                   style={confidenceStyle[result.verdict.confidence] ?? confidenceStyle.Medium}
                 />
-                <CiteText text={result.verdict.why} cite={activeCitations} className="text-slate-400 text-sm" />
+                <CiteText text={result.verdict.why} cite={activeCitations} className="text-slate-400 text-sm" onCiteClick={jumpToLine} />
               </div>
             </Card>
           </div>
@@ -1057,7 +1112,7 @@ export default function Home() {
           <Card className="pl-6">
               <SectionLabel text="Decision Autopsy" color="text-violet-400" />
               <p className="text-slate-200 text-sm font-medium mb-1">
-                <CiteText text={result.autopsy.decision} cite={activeCitations} />
+                <CiteText text={result.autopsy.decision} cite={activeCitations} onCiteClick={jumpToLine} />
               </p>
               <div className="mb-4">
                 <Badge
@@ -1068,11 +1123,11 @@ export default function Home() {
               <div className="grid grid-cols-1 gap-4">
                 <div>
                   <SectionLabel text="Top Risks" color="text-orange-400" />
-                  <CitedBulletList items={result.autopsy.top_risks} color="text-orange-200" cite={activeCitations} />
+                  <CitedBulletList items={result.autopsy.top_risks} color="text-orange-200" cite={activeCitations} onCiteClick={jumpToLine} />
                 </div>
                 <div>
                   <SectionLabel text="Missing Evidence" color="text-red-400" />
-                  <CitedBulletList items={result.autopsy.missing_evidence} color="text-red-200" cite={activeCitations} />
+                  <CitedBulletList items={result.autopsy.missing_evidence} color="text-red-200" cite={activeCitations} onCiteClick={jumpToLine} />
                 </div>
               </div>
             </Card>
@@ -1085,9 +1140,9 @@ export default function Home() {
               <Card className="pl-6 h-full">
                 <SectionLabel text="Optimist" color="text-emerald-400" />
                 <p className="text-slate-200 text-sm mb-3">
-                  <CiteText text={result.optimist.summary} cite={activeCitations} />
+                  <CiteText text={result.optimist.summary} cite={activeCitations} onCiteClick={jumpToLine} />
                 </p>
-                <CitedBulletList items={result.optimist.evidence} color="text-emerald-200" cite={activeCitations} />
+                <CitedBulletList items={result.optimist.evidence} color="text-emerald-200" cite={activeCitations} onCiteClick={jumpToLine} />
               </Card>
             </div>
             <div className="relative">
@@ -1095,9 +1150,9 @@ export default function Home() {
               <Card className="pl-6 h-full">
                 <SectionLabel text="Pessimist" color="text-orange-400" />
                 <p className="text-slate-200 text-sm mb-3">
-                  <CiteText text={result.pessimist.summary} cite={activeCitations} />
+                  <CiteText text={result.pessimist.summary} cite={activeCitations} onCiteClick={jumpToLine} />
                 </p>
-                <CitedBulletList items={result.pessimist.evidence} color="text-orange-200" cite={activeCitations} />
+                <CitedBulletList items={result.pessimist.evidence} color="text-orange-200" cite={activeCitations} onCiteClick={jumpToLine} />
               </Card>
             </div>
           </div>
@@ -1111,18 +1166,18 @@ export default function Home() {
               <div>
                 <p className="text-xs text-slate-500 mb-0.5">Core disagreement</p>
                 <p className="text-slate-200 text-sm">
-                  <CiteText text={result.moderator.disagreement} cite={activeCitations} />
+                  <CiteText text={result.moderator.disagreement} cite={activeCitations} onCiteClick={jumpToLine} />
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-0.5">Stronger side</p>
                 <p className="text-slate-200 text-sm">
-                  <CiteText text={result.moderator.stronger_side} cite={activeCitations} />
+                  <CiteText text={result.moderator.stronger_side} cite={activeCitations} onCiteClick={jumpToLine} />
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-2">What settles it</p>
-                <CitedBulletList items={result.moderator.what_settles_it} color="text-sky-200" cite={activeCitations} />
+                <CitedBulletList items={result.moderator.what_settles_it} color="text-sky-200" cite={activeCitations} onCiteClick={jumpToLine} />
               </div>
             </div>
           </Card>
@@ -1197,25 +1252,88 @@ export default function Home() {
 
           {/* 8 — Rebuttal (collapsed) */}
           <CollapsibleCard title="Rebuttal — Optimist responds" accent="text-slate-400" defaultOpen={false}>
-            <CitedBulletList items={result.rebuttal.bullets} color="text-slate-300" cite={activeCitations} />
+            <CitedBulletList items={result.rebuttal.bullets} color="text-slate-300" cite={activeCitations} onCiteClick={jumpToLine} />
           </CollapsibleCard>
 
-          {/* 9 — Transcript viewer (collapsed) */}
-          {hasHighlights && (
-            <CollapsibleCard title="Transcript Viewer" accent="text-slate-500" defaultOpen={false}>
-              <div className="flex gap-3 mb-3 text-xs">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/50" />
-                  <span className="text-slate-500">Supporting evidence</span>
-                </span>
-              </div>
-              <div className="text-sm leading-relaxed whitespace-pre-wrap text-slate-300 bg-slate-800 rounded-xl p-4 max-h-64 overflow-y-auto">
-                {segments.map((seg, i) => (
-                  <span key={i} className={hlClass[seg.type]}>{seg.text}</span>
-                ))}
-              </div>
-            </CollapsibleCard>
-          )}
+          {/* 9 — Transcript viewer — always shown when result exists */}
+          {(() => {
+            const lines = transcript.split("\n").filter((l) => l.trim());
+            return (
+              <Card ref={transcriptViewerRef as React.Ref<HTMLDivElement>}>
+                <button
+                  onClick={() => setTranscriptViewerOpen((o) => !o)}
+                  className="w-full flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                      Transcript Viewer
+                    </p>
+                    {activeCitations && (
+                      <span className="text-[10px] text-amber-500/80 font-medium">
+                        · click citations to jump here
+                      </span>
+                    )}
+                  </div>
+                  <svg
+                    viewBox="0 0 16 16" fill="none"
+                    className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 transition-transform duration-200"
+                    style={{ transform: transcriptViewerOpen ? "rotate(180deg)" : "rotate(0deg)" }}
+                  >
+                    <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+
+                {transcriptViewerOpen && (
+                  <div className="mt-4 border-t border-slate-800 pt-4">
+                    {hasHighlights && (
+                      <div className="flex gap-3 mb-3 text-xs">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/50" />
+                          <span className="text-slate-500">Supporting evidence</span>
+                        </span>
+                        {activeCitations && (
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-sm bg-amber-500/40" />
+                            <span className="text-slate-500">Cited line</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div className="bg-slate-800/60 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
+                      {lines.map((line, idx) => {
+                        const lineNum = idx + 1;
+                        const isHighlighted = highlightedLine === lineNum;
+                        // check if this line text appears in supporting evidence
+                        const isSupporting = result?.autopsy.supporting_evidence.some(
+                          (ev) => line.includes(ev.slice(0, 20))
+                        );
+                        return (
+                          <div
+                            key={lineNum}
+                            ref={(el) => { lineRefs.current[lineNum] = el; }}
+                            className={`flex gap-3 px-4 py-1.5 text-sm transition-all duration-300
+                              ${isHighlighted
+                                ? "bg-amber-500/20 border-l-2 border-amber-400"
+                                : isSupporting
+                                  ? "bg-emerald-500/8 border-l-2 border-emerald-700/50"
+                                  : "border-l-2 border-transparent"
+                              }`}
+                          >
+                            <span className="text-slate-600 text-xs font-mono w-5 shrink-0 pt-0.5 select-none">
+                              {lineNum}
+                            </span>
+                            <span className={`leading-relaxed ${isHighlighted ? "text-amber-200" : isSupporting ? "text-emerald-200" : "text-slate-300"}`}>
+                              {line}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })()}
 
         </div>
       )}
