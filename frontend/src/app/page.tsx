@@ -621,19 +621,18 @@ function RadarChart({ scores }: { scores: RadarScores }) {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-const EXAMPLE_TRANSCRIPT = `CEO: We promised investors a Q1 launch. It's already March. We need to ship Friday.
-Engineering Lead: We have 14 open bugs. Three of them are critical — one causes data loss on Android.
-Product Manager: The core user journey works fine. The bugs are edge cases. Beta users gave us 4.2 stars.
-Engineering Lead: Edge cases that affect 20% of Android users are not edge cases. That's one in five people losing their data.
-Sales Lead: The client signed based on a Friday launch date. If we slip, we risk the contract.
-Designer: The onboarding flow still has usability issues. Our own testers got confused at step 3.
-CEO: We can patch the data loss bug tonight. Ship Friday, hotfix Saturday.
-Engineering Lead: We've said "hotfix tomorrow" three times this sprint. It never happens.
-QA Lead: We haven't done a full regression test since the last major refactor two weeks ago.
-Product Manager: Competitors are launching next month. First-mover advantage is real.
-Engineering Lead: Shipping broken software is not first-mover advantage. It's first-mover liability.`;
+const EXAMPLE_TRANSCRIPT = `CEO: We have strong demand signals from three European enterprise partners. Now is the right time to expand.
+Sales Lead: We already closed two paid pilots in Germany. Both clients renewed after the trial period.
+Product Manager: Our platform is fully GDPR compliant. We did the legal review last quarter — no blockers there.
+Engineering Lead: Localization will take about six weeks for two engineers. We have the capacity in Q2.
+Finance Director: The expansion budget is approved and sits within our annual forecast. No additional fundraising needed.
+Legal Counsel: Entity registration in each country takes three to six months. We should file immediately if we decide to proceed.
+Sales Lead: Two of our US competitors entered Europe last year. Early movers captured 60 percent of enterprise deals.
+Product Manager: Our NPS in the German pilot was 71. That is significantly above our US average of 54.
+Engineering Lead: We will need local cloud infrastructure for data residency. That adds roughly 15 percent to our hosting costs.
+CEO: The board has reviewed the plan and given full support. This is our highest priority initiative for the year.`;
 
-const EXAMPLE_QUESTION = "Should we launch the product this Friday?";
+const EXAMPLE_QUESTION = "Should we expand to the European market this quarter?";
 
 export default function Home() {
   const [transcript, setTranscript] = useState("");
