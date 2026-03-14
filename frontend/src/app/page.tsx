@@ -737,15 +737,26 @@ export default function Home() {
     <main className="min-h-screen flex flex-col items-center px-4 py-14 gap-8"
           style={{ background: "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.12) 0%, transparent 70%), #020617" }}>
 
+      {/* Homepage link — top right */}
+      <div className="w-full max-w-2xl flex justify-end mb-[-1rem]">
+        <a
+          href="https://homepage-nu-silk.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300
+                     border border-slate-800 hover:border-slate-700 bg-slate-900/60
+                     rounded-full px-3 py-1.5 transition"
+        >
+          <svg viewBox="0 0 16 16" fill="none" className="w-3 h-3">
+            <path d="M2 8.5L8 2l6 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M4 7v7h3v-4h2v4h3V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          About this project
+        </a>
+      </div>
+
       {/* Header */}
       <header className="text-center max-w-xl flex flex-col items-center gap-3">
-        {/* logo mark */}
-        <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center mb-1">
-          <svg viewBox="0 0 20 20" fill="none" className="w-5 h-5">
-            <circle cx="10" cy="10" r="7" stroke="#6366f1" strokeWidth="1.5"/>
-            <path d="M10 6v4l2.5 2.5" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-        </div>
         <h1 className="text-4xl font-extrabold tracking-tight text-white">
           Decision{" "}
           <span className="bg-gradient-to-r from-brand-400 to-violet-400 bg-clip-text text-transparent">
