@@ -741,8 +741,6 @@ export default function Home() {
       <div className="w-full max-w-2xl flex justify-end mb-[-1rem]">
         <a
           href="https://homepage-nu-silk.vercel.app/"
-          target="_blank"
-          rel="noopener noreferrer"
           className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300
                      border border-slate-800 hover:border-slate-700 bg-slate-900/60
                      rounded-full px-3 py-1.5 transition"
